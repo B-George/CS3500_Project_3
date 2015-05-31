@@ -1,5 +1,6 @@
 #include <cstring>
 #include <cstdlib>
+#include <stdlib.h>
 #include <iostream>
 #include <arpa/inet.h>
 #include <sys/types.h>
@@ -31,6 +32,12 @@ const unsigned long mask = 0;
 
 // sets first row of data(magic, flags, message type)
 void getFirstRow(unsigned short mag, char flag, char msg_type); 
+
+// vote for candidate
+void placeVote();
+
+// query server for voting statistics
+void getStats();
 
 // calculate checksum
 unsigned long getCheckSum();
@@ -76,7 +83,7 @@ int main(int argc, char* argv[])
 	  cout << "Status: " << status << endl;
 	  exit(-1);
 	}
-
+	placeVote();
 	
 	
 	return 0;
@@ -96,4 +103,25 @@ void getFirstRow(unsigned short mag, char flag, char msg_type)
 unsigned long getCheckSum()
 {
 	return CSUM ^ first_row ^ req_ID ^ candidate ^ vote_count ^ cookie;
+}
+
+void placeVote()
+{
+	cout << "Please enter a candidate number between 0x0 and 0xFFFFFFFF: ";
+	cin >> hex >> candidate;
+	cout << "candidate: " << candidate; << endl;
+}
+
+void getStats()
+{
+	//set first row bytes -- magic = MAGIC, flags = 0x80, type = TYPEINQ
+		magic = MAGIC;
+		flags = 0x80;
+		type = TYPEINQ;
+		getFirstRow(magic, flags, type);
+		req_ID = rand();
+		candidate = 0x0;
+		vote_count = 0x0;
+		cook = 0x0;
+		
 }
