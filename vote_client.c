@@ -19,8 +19,9 @@
 #define SBIT 0 
 #define TBIT 0 
 
+using namespace std;
 
-bool cbit = false;
+bool cbit = false; // checksum flag
 bool request = false; // bit 6 of flag field, 1 = response, 0 = request
 unsigned long first_row, req_ID, check_sum, candidate, vote_count, cookie;
 unsigned short magic = MAGIC;
@@ -28,9 +29,11 @@ char flags, type;
 char *msg[24];
 const unsigned long mask = 0;
 
-unsigned long getFirstRow(const unsigned short mag, const char flag, const char msg_type); 
-	
-using namespace std;
+// sets first row of data(magic, flags, message type)
+void getFirstRow(unsigned short mag, char flag, char msg_type); 
+
+// calculate checksum
+unsigned long getCheckSum();
 
 int main(int argc, char* argv[])
 {
@@ -75,17 +78,22 @@ int main(int argc, char* argv[])
 	}
 
 	
-
-	return 0;
-
 	
+	return 0;
 }
 
-char* getFirstRow(const unsigned short mag, const char flag, const char msg_type)
+void getFirstRow(unsigned short mag, char flag, char msg_type)
 {
-	char* ret_val[];
-	ret_val = char(mag) + char(flag) + char(msg_type);
-	return ret_val;
-	
-	
+	char buffer[4];
+	buffer[0] = msg_type;
+	buffer[1] = flag;
+	buffer[2] = mag & 0xff;
+	buffer[3] = (mag >> 8) & 0xff;
+	memcpy(&first_row, buffer, sizeof(long));
+		
+}
+
+unsigned long getCheckSum()
+{
+	return CSUM ^ first_row ^ req_ID ^ candidate ^ vote_count ^ cookie;
 }
