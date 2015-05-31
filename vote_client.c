@@ -44,7 +44,11 @@ unsigned long getCheckSum();
 
 int main(int argc, char* argv[])
 {
-	
+	bool endProg = false;
+	bool isValidInput = false;
+	cout << "Welcome to the votinator 3000, \n";
+	cout << "the program that lets you vote for \n";
+	cout << "four billion candidates. Because, yeah.\n\n";
 	//get port # from arguments
   unsigned short servPort = atoi(argv[2]);
   //get IP from arguments
@@ -52,19 +56,39 @@ int main(int argc, char* argv[])
   unsigned long servIP;
   //convert dotted decimal address to int
   int status = inet_pton(AF_INET, IPAddr, &servIP);
+  cout << "checking IP address";
+  delay(100);
+  cout << ".";
+  delay(100);
+  cout << ".";
+  delay(100);
+  cout << ".\n";
+  
+  // check IP address
   if (status <= 0)
 	{
 	  cout << "Decimal Address Conversion Error :(\n";
 	  exit(-1);
+	}else{
+		cout << "Valid IP address confirmed\n\n";
 	}
   //create a TCP socket
-
+	cout << "Creating TCP socket";
+	delay(100);
+	cout << ".";
+	delay(100);
+	cout << ".";
+	delay(100);
+	cout << ".\n";
+	
   int sock = socket(AF_INET, SOCK_STREAM,
 					IPPROTO_TCP);
   if(sock < 0)
 	{
 	  cerr << "Socket error :(" << endl;
 	  exit(-1);
+	}else{
+		cout << "Success\n\n";
 	}
 
   //set the fields
@@ -75,6 +99,14 @@ int main(int argc, char* argv[])
   servAddr.sin_port = htons(servPort);
 
   //connect to the server
+  cout << "Connecting to server";
+  delay(100);
+  cout << ".";
+  delay(100);
+  cout << ".";
+  delay(100);
+  cout << ".\n";
+  
   status = connect(sock, (struct sockaddr *) &servAddr,
 				   sizeof(servAddr));
   if(status < 0)
@@ -82,8 +114,31 @@ int main(int argc, char* argv[])
 	  cerr << "Connection Error :(" << endl;
 	  cout << "Status: " << status << endl;
 	  exit(-1);
+	}else{
+		cout << "Connection successful\n\n";
 	}
-	placeVote();
+	
+	while(!endProg) {
+		while(!isValidInput) {
+			int input;
+			cout << "To vote for a number, type 1\n\n";
+			cout << "To get voting statistics, type 2\n\n";
+			cin >> input;
+			if((input == 1) || (input == 1) {
+				isValidInput = true;
+			}else{
+				cout << "Invalid input, try again\n\n";
+			}
+		}
+		isValidInput = false;
+		switch (input) {
+			case 1:
+				placeVote();				
+			case 2:
+				getStats();
+		}
+	}
+
 	//change something
 	
 	
@@ -110,19 +165,20 @@ void placeVote()
 {
 	cout << "Please enter a candidate number between 0x0 and 0xFFFFFFFF: ";
 	cin >> hex >> candidate;
-	cout << "candidate: " << candidate; << endl;
+	cout << "candidate: " << candidate << endl;
 }
 
 void getStats()
 {
 	//set first row bytes -- magic = MAGIC, flags = 0x80, type = TYPEINQ
 		magic = MAGIC;
-		flags = 0x80;
+		flags = (char) 0x80;
 		type = TYPEINQ;
 		getFirstRow(magic, flags, type);
 		req_ID = rand();
 		candidate = 0x0;
 		vote_count = 0x0;
-		cook = 0x0;
+		cookie = 0x0;
+		check_sum = getCheckSum();
 		
 }
