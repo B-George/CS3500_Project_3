@@ -7,6 +7,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <string>
+#include <vector>
 
 #define REP(a,b) for(int i = a; a < b, a++);
 #define LENGTH 24
@@ -22,16 +24,35 @@
 
 using namespace std;
 
+struct req_IDs {
+	unsigned long ID;
+	unsigned long response[6];
+	struct req_IDs *next;
+};
+
+req_IDs *root;
+root = new req_IDs;
+root->next = NULL;
+
 bool cbit = false; // checksum flag
 bool request = false; // bit 6 of flag field, 1 = response, 0 = request
 unsigned long first_row, req_ID, check_sum, candidate, vote_count, cookie;
 unsigned short magic = MAGIC;
 char flags, type;
-char *msg[24];
+int out_buffer[6];
+int in_buffer[6];
 const unsigned long mask = 0;
+
+
 
 // sets first row of data(magic, flags, message type)
 void getFirstRow(unsigned short mag, char flag, char msg_type); 
+
+// assigns random 32 bit # to req_ID and stores in vector;
+unsigned long getReq_ID();
+
+// place bytes in buffer
+void fillBuff();
 
 // vote for candidate
 void placeVote();
@@ -41,6 +62,12 @@ void getStats();
 
 // calculate checksum
 unsigned long getCheckSum();
+
+// send all bits in buffer
+// socket == socket to send data to
+// buf == data buffer
+// *len == pointer to buffer length in bytes (int)
+int sendall(int socket, char *buf, int *len);
 
 int main(int argc, char* argv[])
 {
@@ -111,7 +138,7 @@ int main(int argc, char* argv[])
 				   sizeof(servAddr));
   if(status < 0)
 	{
-	  cerr << "Connection Error :(" << endl;
+	  cerr << "Connection Error." << endl;
 	  cout << "Status: " << status << endl;
 	  exit(-1);
 	}else{
@@ -139,7 +166,6 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	//change something
 	
 	
 	return 0;
@@ -153,7 +179,36 @@ void getFirstRow(unsigned short mag, char flag, char msg_type)
 	buffer[2] = mag & 0xff;
 	buffer[3] = (mag >> 8) & 0xff;
 	memcpy(&first_row, buffer, sizeof(long));
-		
+}
+
+unsigned long getReq_ID()
+{
+	req_IDs *temp;
+	temp = root;
+	if(temp != NULL){
+		while(temp->next != NULL){
+		temp = temp->next;}
+	}
+	temp->next = new req_IDs;
+	temp = temp->next;
+	temp->ID = rand();
+	return temp->ID;
+}
+
+void fillBuff()
+{
+	first_row = htonl(first_row);
+	req_ID = htonl(req_ID);
+	candidate = htonl(candidate);
+	vote_count = htonl(vote_count);
+	cookie = htonl(cookie);
+	check_sum= getCheckSum();
+	out_buffer[5] = cookie;
+	out_buffer[4] = vote_count;
+	out_buffer[3] = candidate;
+	out_buffer[2] = check_sum;
+	out_buffer[1] = req_ID;
+	out_buffer[0] = flags;
 }
 
 unsigned long getCheckSum()
@@ -163,6 +218,15 @@ unsigned long getCheckSum()
 
 void placeVote()
 {
+	//set first row bytes -- magic = MAGIC, flags = 0x80, type = TYPEINQ
+		magic = MAGIC;
+		flags = (char) 0x18;
+		type = TYPEINQ;
+		getFirstRow(magic, flags, type);
+		req_ID = getreq_ID();
+		vote_count = 0x0;
+		cookie = 0x0;
+		
 	cout << "Please enter a candidate number between 0x0 and 0xFFFFFFFF: ";
 	cin >> hex >> candidate;
 	cout << "candidate: " << candidate << endl;
@@ -172,13 +236,29 @@ void getStats()
 {
 	//set first row bytes -- magic = MAGIC, flags = 0x80, type = TYPEINQ
 		magic = MAGIC;
-		flags = (char) 0x80;
+		flags = (char) 0x08;
 		type = TYPEINQ;
 		getFirstRow(magic, flags, type);
 		req_ID = rand();
 		candidate = 0x0;
 		vote_count = 0x0;
 		cookie = 0x0;
-		check_sum = getCheckSum();
+				
+}
+
+int sendall(int socket, char *buf, int *len)
+{
+		int total = 0;
+		int bytesleft = *len;
+		int n;
 		
+		while(total < *len) {
+			n = send(socket, buf+total, bytesleft, 0);
+			if (n == -1) {break; }
+			total += n;
+			bytesleft -= n;
+		}
+
+		*len = total;
+		return n == -1?-1:0; // return -1 on failure, 0 on success
 }
