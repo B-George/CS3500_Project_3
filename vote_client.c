@@ -31,8 +31,7 @@ struct req_IDs {
 };
 
 req_IDs *root;
-root = new req_IDs;
-root->next = NULL;
+
 
 bool cbit = false; // checksum flag
 bool request = false; // bit 6 of flag field, 1 = response, 0 = request
@@ -71,6 +70,8 @@ int sendall(int socket, char *buf, int *len);
 
 int main(int argc, char* argv[])
 {
+	root = new req_IDs;
+	root->next = NULL;
 	bool endProg = false;
 	bool isValidInput = false;
 	cout << "Welcome to the votinator 3000, \n";
@@ -83,13 +84,7 @@ int main(int argc, char* argv[])
   unsigned long servIP;
   //convert dotted decimal address to int
   int status = inet_pton(AF_INET, IPAddr, &servIP);
-  cout << "checking IP address";
-  delay(100);
-  cout << ".";
-  delay(100);
-  cout << ".";
-  delay(100);
-  cout << ".\n";
+  cout << "checking IP address\n\n";
   
   // check IP address
   if (status <= 0)
@@ -100,13 +95,7 @@ int main(int argc, char* argv[])
 		cout << "Valid IP address confirmed\n\n";
 	}
   //create a TCP socket
-	cout << "Creating TCP socket";
-	delay(100);
-	cout << ".";
-	delay(100);
-	cout << ".";
-	delay(100);
-	cout << ".\n";
+	cout << "Creating TCP socket\n\n";
 	
   int sock = socket(AF_INET, SOCK_STREAM,
 					IPPROTO_TCP);
@@ -126,13 +115,7 @@ int main(int argc, char* argv[])
   servAddr.sin_port = htons(servPort);
 
   //connect to the server
-  cout << "Connecting to server";
-  delay(100);
-  cout << ".";
-  delay(100);
-  cout << ".";
-  delay(100);
-  cout << ".\n";
+  cout << "Connecting to server\n\n";
   
   status = connect(sock, (struct sockaddr *) &servAddr,
 				   sizeof(servAddr));
@@ -151,22 +134,19 @@ int main(int argc, char* argv[])
 			cout << "To vote for a number, type 1\n\n";
 			cout << "To get voting statistics, type 2\n\n";
 			cin >> input;
-			if((input == 1) || (input == 1) {
+			if(input == 1) {
 				isValidInput = true;
+				placeVote();
+			}else if(input == 2) {
+				isValidInput = true;
+				getStats();
 			}else{
 				cout << "Invalid input, try again\n\n";
 			}
 		}
 		isValidInput = false;
-		switch (input) {
-			case 1:
-				placeVote();				
-			case 2:
-				getStats();
 		}
 	}
-
-	
 	
 	return 0;
 }
@@ -218,7 +198,7 @@ unsigned long getCheckSum()
 
 void placeVote()
 {
-	//set first row bytes -- magic = MAGIC, flags = 0x80, type = TYPEINQ
+	//set first row bytes -- magic = MAGIC, flags = 0x18, type = TYPEINQ
 		magic = MAGIC;
 		flags = (char) 0x18;
 		type = TYPEINQ;
@@ -234,7 +214,7 @@ void placeVote()
 
 void getStats()
 {
-	//set first row bytes -- magic = MAGIC, flags = 0x80, type = TYPEINQ
+	//set first row bytes -- magic = MAGIC, flags = 0x08, type = TYPEINQ
 		magic = MAGIC;
 		flags = (char) 0x08;
 		type = TYPEINQ;
