@@ -17,7 +17,6 @@
 #include <stdio.h>
 
 #define REP(a,b) for(int i = a; a < b, a++);
-#define LENGTH 24
 #define TYPEVOTE 0x18
 #define TYPEINQ 0x08
 #define VOTECOUNT 0
@@ -27,15 +26,16 @@
 #define MBIT 0 
 #define SBIT 0 
 #define TBIT 0 
+#define DEBUG 1
 
 using namespace std;
 
 struct vote_msg {
-	unsigned short magic;
-	unsigned char flag, type;
-	unsigned long req_ID, check_sum, candidate, vote_count, cookie;
+	unsigned long ReqID, Candidate, VoteCount, Cookie;
 };
 
+// constants
+const int LENGTH = 24;
 
 // globals
 
@@ -58,7 +58,7 @@ struct ThreadArgs
 };
 
 // sets first row of data(magic, flags, message type)
-void getFirstRow(unsigned short mag, char flag, char msg_type); 
+void setFirstRow(unsigned short mag, char flag, char msg_type); 
 
 // place bytes in buffer
 void fillBuff();
@@ -84,7 +84,15 @@ void processClient(int clientSock);
 // thread processing
 void *threadMain(void *args);
 
+// calculate hash Number for array indexing
 int hashCand(unsigned long candNum);
+
+// send inquiry reply
+void processInquiry(unsigned long c, unsigned char f);
+
+// process votes and send reply
+void processVote(unsigned long r, unsigned long c, 
+				unsigned long vc, unsigned long omnomnomnomnom);
 
 int main(int argc, char* argv[])
 {
@@ -187,6 +195,16 @@ int main(int argc, char* argv[])
   return 0;
 }
 
+void setFirstRow(unsigned short mag, char flag, char msg_type)
+{
+	char buffer[4];
+	buffer[0] = msg_type;
+	buffer[1] = flag;
+	buffer[2] = mag & 0xff;
+	buffer[3] = (mag >> 8) & 0xff;
+	memcpy(&first_row, buffer, sizeof(long));
+}
+
 void fillBuff()
 {
 	first_row = htonl(first_row);
@@ -194,7 +212,7 @@ void fillBuff()
 	candidate = htonl(candidate);
 	vote_count = htonl(vote_count);
 	cookie = htonl(cookie);
-	check_sum= getCheckSum();
+	check_sum = getCheckSum();
 	out_buffer[3] = (cookie >> 24) & 0xFF;
 	out_buffer[2] = (cookie >> 16) & 0xFF;
 	out_buffer[1] = (cookie >> 8) & 0xFF;
@@ -275,6 +293,17 @@ void processClient(int clientSock)
 	tmpVot = (buffer[7] << 24) + (buffer[6] << 16) + (buffer[5] << 8) + (buffer[4]);
 	tmpCook = (buffer[3] << 24) + (buffer[2] << 16) + (buffer[1] << 8) + (buffer[0]);
 	
+	#if DEBUG == 1
+		cout << "\nmessage contents\nmagic = " << tmpMag << endl;
+		cout << "Flag = " << tmpFlag << endl;
+		cout << "Type = " << tmpType << endl;
+		cout << "Req_ID = " << tmpReq << endl;
+		cout << "check_sum = " << tmpCSum << endl;
+		cout << "candidate = " << tmpCand << endl;
+		cout << "vote ct = " << tmpVot << endl;
+		cout << "cookie = " << tmpCook << endl << endl;
+	#endif
+	
 	ntohs(tmpMag);
 	
 	if(tmpMag != MAGIC){
@@ -311,10 +340,15 @@ void processClient(int clientSock)
 		
 		// if inquiry do inquiry shit
 		if(tmpType == TYPEINQ) {
+			pthread_mutex_lock(&boardLock);
 			processInquiry(tmpCand);
+			sendall(clientSock, out_buffer, *LENGTH);
+			pthread_mutex_unlock(&boardLock);
 		}else if(tmpType == TYPEVOTE){
+		
+			
 			processVote(tmpCand);
-		// else record vote
+			
 		}else{
 			tmpFlag |= 1 << 0;
 		}
@@ -357,3 +391,24 @@ int hashCand(unsigned long candNum)
 	return candNum %(65536);
 }
 
+void processInquiry(unsigned long r, unsigned long c, unsigned char f)
+{
+	int hashNo = hashCand(c);
+	setFirstRow(MAGIC, f, TYPEINQ)
+	req_ID = r;
+	candidate = c;
+	vote_count = candidate_info[hashNo].VoteCount;
+	cookie = rand();
+	fillBuff();
+	sendall();
+}
+
+void processVote(unsigned long r, unsigned long c, 
+					unsigned long vc, unsigned long omnomnomnomnom)
+{
+	int hashNo = hashCand(c);
+	candidate_info[hashNo].ReqID = r;
+	candidate_info[hashNo].Candidate = c;
+	candidate_info[hashNo].VoteCount = vc;
+	candidate_info[hashNo].Cookie = omnomnomnomnom;
+}
