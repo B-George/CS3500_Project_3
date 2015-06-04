@@ -64,13 +64,14 @@ void setFirstRow(unsigned short mag, char flag, char msg_type);
 void fillBuff();
 
 // calculate checksum
-unsigned long getCheckSum();
+unsigned long getCheckSum(unsigned long tmpRe, unsigned long tmpCandi,
+							unsigned long tmpVC, unsigned long tmpCk);
 
 // send all bits in buffer
 // socket == socket to send data to
 // buf == data buffer
 // *len == pointer to buffer length in bytes (int)
-int sendall(int socket, char *buf, int *len);
+int sendall(int socket);
 
 //Send a long over the socket
 int sendLong(int clientSock, long num);
@@ -88,7 +89,7 @@ void *threadMain(void *args);
 int hashCand(unsigned long candNum);
 
 // send inquiry reply
-void processInquiry(unsigned long c, unsigned char f);
+void processInquiry(unsigned long r, unsigned long c, unsigned char f);
 
 // process votes and send reply
 void processVote(unsigned long r, unsigned long c, 
@@ -212,7 +213,7 @@ void fillBuff()
 	candidate = htonl(candidate);
 	vote_count = htonl(vote_count);
 	cookie = htonl(cookie);
-	check_sum = getCheckSum();
+	check_sum = getCheckSum(req_ID, candidate, vote_count, cookie);
 	out_buffer[3] = (cookie >> 24) & 0xFF;
 	out_buffer[2] = (cookie >> 16) & 0xFF;
 	out_buffer[1] = (cookie >> 8) & 0xFF;
@@ -245,20 +246,19 @@ unsigned long getCheckSum(unsigned long tmpRe, unsigned long tmpCandi,
 	return CSUM ^ tmpRe ^ tmpCandi ^ tmpVC ^ tmpCk;
 }
 
-int sendall(int socket, char *buf, int *len)
+int sendall(int socket)
 {
 		int total = 0;
-		int bytesleft = *len;
+		int bytesleft = LENGTH;
 		int n;
 		
-		while(total < *len) {
-			n = send(socket, buf+total, bytesleft, 0);
+		while(total < LENGTH) {
+			n = send(socket, out_buffer+total, bytesleft, 0);
 			if (n == -1) {break; }
 			total += n;
 			bytesleft -= n;
 		}
 
-		*len = total;
 		return n == -1?-1:0; // return -1 on failure, 0 on success
 }
 
@@ -341,13 +341,14 @@ void processClient(int clientSock)
 		// if inquiry do inquiry shit
 		if(tmpType == TYPEINQ) {
 			pthread_mutex_lock(&boardLock);
-			processInquiry(tmpCand);
-			sendall(clientSock, out_buffer, *LENGTH);
+			processInquiry(tmpReq, tmpCand, tmpFlag);
+			sendall(clientSock);
 			pthread_mutex_unlock(&boardLock);
 		}else if(tmpType == TYPEVOTE){
 		
-			
-			processVote(tmpCand);
+			pthread_mutex_lock(&boardLock);
+			processVote(tmpReq, tmpCand, tmpVot, tmpCook);
+			pthread_mutex_unlock(&boardLock);\
 			
 		}else{
 			tmpFlag |= 1 << 0;
@@ -394,13 +395,12 @@ int hashCand(unsigned long candNum)
 void processInquiry(unsigned long r, unsigned long c, unsigned char f)
 {
 	int hashNo = hashCand(c);
-	setFirstRow(MAGIC, f, TYPEINQ)
+	setFirstRow(MAGIC, f, TYPEINQ);
 	req_ID = r;
 	candidate = c;
 	vote_count = candidate_info[hashNo].VoteCount;
 	cookie = rand();
 	fillBuff();
-	sendall();
 }
 
 void processVote(unsigned long r, unsigned long c, 
