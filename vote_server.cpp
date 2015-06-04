@@ -30,15 +30,16 @@
 
 using namespace std;
 
-struct req_IDs {
-	unsigned long ID;
-	unsigned long response[6];
-	struct req_IDs *next;
+struct vote_msg {
+	unsigned short magic;
+	unsigned char flag, type;
+	unsigned long req_ID, check_sum, candidate, vote_count, cookie;
 };
 
 
 // globals
-struct req_IDs *root;
+
+vote_msg candidate_info[65536];
 
 bool cbit = false; // checksum flag
 bool request = false; // bit 6 of flag field, 1 = response, 0 = request
@@ -71,8 +72,6 @@ unsigned long getCheckSum();
 // *len == pointer to buffer length in bytes (int)
 int sendall(int socket, char *buf, int *len);
 
-
-
 //Send a long over the socket
 int sendLong(int clientSock, long num);
 
@@ -80,77 +79,12 @@ int sendLong(int clientSock, long num);
 int recvLong(int clientSock, long &msg);
 
 //The main client-server interaction loop
-void processClient(int clientSock)
-{
-  
-  int bytesLeft = 24;
-  char buffer[24];
-  char* bp = buffer;
-  while(bytesLeft > 0)
-	{
-	  int bytesRecv = recv(clientSock, &buffer[24-bytesLeft],
-						   bytesLeft, 0);
-	  if(bytesRecv <= 0)
-		{
-		  cout << "Probable client disconnect" << endl;
-		  return;
-		}
-	  bytesLeft = bytesLeft - bytesRecv;
-	}
-
-	  int bytesSent = send(clientSock, (void *) na,
-						24, 0);
-		if(bytesSent != 24)
-			{
-			  cout << "bytesSent != 24" << endl;
-			  exit(-1);
-			}
-		  bytesSent = send(clientSock, (void *) nb,
-						   24, 0);
-		  if(bytesSent != 24)
-			{
-			  cout << "bytesSent != 24" << endl;
-			  exit(-1);
-			}
-		  bytesSent = send(clientSock, (void *) nc,
-						   24, 0);
-		  if(bytesSent != 24)
-			{
-			  cout << "bytesSent != 24" << endl;
-			  exit(-1);
-			}
-
-}  
+void processClient(int clientSock);  
     
-void *threadMain(void *args)
-{
-  int clientSock;
+// thread processing
+void *threadMain(void *args);
 
-  //make sure thread resources are deallocated on return
-  pthread_detach(pthread_self());
-
-  //extract the socket FD
-  struct ThreadArgs *threadArgs = (struct ThreadArgs *) args;
-  clientSock = ((ThreadArgs *) threadArgs)->clientSock;
-    
-  //communicate with client;
-  processClient(clientSock);
-  
-  //close client socket
-  int status = close(clientSock);
-  if(status < 0)
-	{
-	  cout << "Error closing socket" << endl;
-	}
-  if(status == 0)
-	{
-	  cout << "Socket closed" << endl;
-	}
-
-  delete threadArgs;
-  
-  return NULL; //done
-}
+int hashCand(unsigned long candNum);
 
 int main(int argc, char* argv[])
 {
@@ -287,9 +221,10 @@ void fillBuff()
 	out_buffer[0] = (first_row) & 0xFF;
 }
 
-unsigned long getCheckSum()
+unsigned long getCheckSum(unsigned long tmpRe, unsigned long tmpCandi,
+							unsigned long tmpVC, unsigned long tmpCk)
 {
-	return CSUM ^ first_row ^ req_ID ^ candidate ^ vote_count ^ cookie;
+	return CSUM ^ tmpRe ^ tmpCandi ^ tmpVC ^ tmpCk;
 }
 
 int sendall(int socket, char *buf, int *len)
@@ -309,38 +244,117 @@ int sendall(int socket, char *buf, int *len)
 		return n == -1?-1:0; // return -1 on failure, 0 on success
 }
 
-//Send a long over the socket
-int sendLong(int clientSock, long num)
+//The main client-server interaction loop
+void processClient(int clientSock)
 {
-  long networkNum = htonl(num);
-	
-  int bytesSent = send(clientSock, (void *) &networkNum,
-					   sizeof(long), 0);
-  if(bytesSent != sizeof(long))
+	unsigned short tmpMag;
+	unsigned char tmpFlag, tmpType;
+  unsigned long tmpReq, tmpCSum, tmpCand, tmpVot, tmpCook;
+  int bytesLeft = 24;
+  char buffer[24];
+  char* bp = buffer;
+  while(bytesLeft > 0)
 	{
-	  return -1;
-	}
-  return 0;
-}
-
-//Receive a long over the socket
-int recvLong(int clientSock, long &msg)
-{
-  int bytesLeft = sizeof(long);
-  long networkMsg;
-  char* gp = (char *) &networkMsg;
-
-  while(bytesLeft)
-	{
-	  int bytesRecv = recv(clientSock, gp,
+	  int bytesRecv = recv(clientSock, &buffer[24-bytesLeft],
 						   bytesLeft, 0);
 	  if(bytesRecv <= 0)
 		{
-		  return -1;
+		  cout << "Probable client disconnect" << endl;
+		  return;
 		}
 	  bytesLeft = bytesLeft - bytesRecv;
-	  gp = gp + bytesRecv;
 	}
-  msg = ntohl(networkMsg);
-  return 0;
+ //**** process buffer 
+	(tmpMag >> 8) & 0xFF = buffer[23];
+	(tmpMag) & 0xFF = buffer[22];
+	(tmpFlag) & 0xFF = buffer[21];
+	(tmpType) & 0xFF = buffer[20];
+	(tmpReq >> 24) & 0xFF = buffer[19];
+	(tmpReq >> 16) & 0xFF = buffer[18];
+	(tmpReq >> 8) & 0xFF = buffer[17];
+	(tmpReq) & 0xFF = buffer[16];
+	(tmpCSum >> 24) & 0xFF = buffer[15];
+	(tmpCSum >> 16) & 0xFF = buffer[14];
+	(tmpCSum >> 8) & 0xFF = buffer[13];
+	(tmpCSum) & 0xFF = buffer[12];
+	(tmpCand >> 24) & 0xFF = buffer[11];
+	(tmpCand >> 16) & 0xFF = buffer[10];
+	(tmpCand >> 8) & 0xFF = buffer[9];
+	(tmpCand) & 0xFF = buffer[8];
+	(tmpVot >> 24) & 0xFF = buffer[7];
+	(tmpVot >> 16) & 0xFF = buffer[6];
+	(tmpVot >> 8) & 0xFF = buffer[5];
+	(tmpVot) & 0xFF = buffer[4];
+	(tmpCook >> 24) & 0xFF = buffer[3];
+	(tmpCook >> 16) & 0xFF = buffer[2];
+	(tmpCook >> 8) & 0xFF = buffer[1];
+	(tmpCook) & 0xFF = buffer[0];
+	ntohs(tmpMag);
+	
+	if(tmpMag != MAGIC){
+		cout << "Error. Magic is not.\n\n";
+		// do shit with bad msg
+	}
+	// process flags
+	if(tmpFlag == 0){
+		cout << "No check_sum for this msg. Bad dog.\n\n";
+		// do shit for no checksum
+		
+	}else if(tmpFlag == 0xF0){
+		if(getCheckSum(tmpReq, tmpCand, tmpVot, tmpCook) != CSUM){
+			cout << "incorrect checksum. bad dog.\n\n";
+			// do shit for bad checksum
+		}else{
+			ntohl(tmpReq);
+			ntohl(tmpCand); 
+			ntohl(tmpVot);
+			ntohl(tmpCook);
+			
+			// do shit for good checksum
+			// check type
+			// if inquiry do inquiry shit
+			if(tmpType == TYPEINQ) {
+				processInquiry(tmpCand);
+			}else{
+				processVote(tmpCand);
+			// else record vote
+			}
+		}			
+	}
+		// send reply shit
+}  
+    
+void *threadMain(void *args)
+{
+  int clientSock;
+
+  //make sure thread resources are deallocated on return
+  pthread_detach(pthread_self());
+
+  //extract the socket FD
+  struct ThreadArgs *threadArgs = (struct ThreadArgs *) args;
+  clientSock = ((ThreadArgs *) threadArgs)->clientSock;
+    
+  //communicate with client;
+  processClient(clientSock);
+  
+  //close client socket
+  int status = close(clientSock);
+  if(status < 0)
+	{
+	  cout << "Error closing socket" << endl;
+	}
+  if(status == 0)
+	{
+	  cout << "Socket closed" << endl;
+	}
+
+  delete threadArgs;
+  
+  return NULL; //done
+}
+
+int hashCand(unsigned long candNum)
+{
+	return candNum %(65536);
 }
