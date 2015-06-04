@@ -266,30 +266,15 @@ void processClient(int clientSock)
 	  bytesLeft = bytesLeft - bytesRecv;
 	}
  //**** process buffer 
-	(tmpMag >> 8) & 0xFF = buffer[23];
-	(tmpMag) & 0xFF = buffer[22];
-	(tmpFlag) & 0xFF = buffer[21];
-	(tmpType) & 0xFF = buffer[20];
-	(tmpReq >> 24) & 0xFF = buffer[19];
-	(tmpReq >> 16) & 0xFF = buffer[18];
-	(tmpReq >> 8) & 0xFF = buffer[17];
-	(tmpReq) & 0xFF = buffer[16];
-	(tmpCSum >> 24) & 0xFF = buffer[15];
-	(tmpCSum >> 16) & 0xFF = buffer[14];
-	(tmpCSum >> 8) & 0xFF = buffer[13];
-	(tmpCSum) & 0xFF = buffer[12];
-	(tmpCand >> 24) & 0xFF = buffer[11];
-	(tmpCand >> 16) & 0xFF = buffer[10];
-	(tmpCand >> 8) & 0xFF = buffer[9];
-	(tmpCand) & 0xFF = buffer[8];
-	(tmpVot >> 24) & 0xFF = buffer[7];
-	(tmpVot >> 16) & 0xFF = buffer[6];
-	(tmpVot >> 8) & 0xFF = buffer[5];
-	(tmpVot) & 0xFF = buffer[4];
-	(tmpCook >> 24) & 0xFF = buffer[3];
-	(tmpCook >> 16) & 0xFF = buffer[2];
-	(tmpCook >> 8) & 0xFF = buffer[1];
-	(tmpCook) & 0xFF = buffer[0];
+	tmpMag = (buffer[23] << 8) + (buffer[22]);
+	tmpFlag = buffer[21];
+	tmpType = buffer[20];
+	tmpReq = (buffer[19] << 24) + (buffer[18] << 16) + (buffer[17] << 8) + (buffer[16]);
+	tmpCSum = (buffer[15] << 24) + (buffer[14] << 16) + (buffer[13] << 8) + (buffer[12]);
+	tmpCand = (buffer[11] << 24) + (buffer[10] << 16) + (buffer[9] << 8) + (buffer[8]);
+	tmpVot = (buffer[7] << 24) + (buffer[6] << 16) + (buffer[5] << 8) + (buffer[4]);
+	tmpCook = (buffer[3] << 24) + (buffer[2] << 16) + (buffer[1] << 8) + (buffer[0]);
+	
 	ntohs(tmpMag);
 	
 	if(tmpMag != MAGIC){
@@ -371,3 +356,4 @@ int hashCand(unsigned long candNum)
 {
 	return candNum %(65536);
 }
+
