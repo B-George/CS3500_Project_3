@@ -195,30 +195,30 @@ void fillBuff()
 	vote_count = htonl(vote_count);
 	cookie = htonl(cookie);
 	check_sum= getCheckSum();
-	out_buffer[23] = (cookie >> 24) & 0xFF;
-	out_buffer[22] = (cookie >> 16) & 0xFF;
-	out_buffer[21] = (cookie >> 8) & 0xFF;
-	out_buffer[20] = (cookie) & 0xFF;
-	out_buffer[19] = (vote_count >> 24) & 0xFF;
-	out_buffer[18] = (vote_count >> 16) & 0xFF;
-	out_buffer[17] = (vote_count >> 8) & 0xFF;
-	out_buffer[16] = (vote_count) & 0xFF;
-	out_buffer[15] = (candidate >> 24) & 0xFF;
-	out_buffer[14] = (candidate >> 16) & 0xFF;
-	out_buffer[13] = (candidate >> 8) & 0xFF;
-	out_buffer[12] = (candidate) & 0xFF;
-	out_buffer[11] = (check_sum >> 24) & 0xFF;
-	out_buffer[10] = (check_sum >> 16) & 0xFF;
-	out_buffer[9] = (check_sum >> 8) & 0xFF;
-	out_buffer[8] = (check_sum) & 0xFF;
-	out_buffer[7] = (req_ID >> 24) & 0xFF;
-	out_buffer[6] = (req_ID >> 16) & 0xFF;
-	out_buffer[5] = (req_ID >> 8) & 0xFF;
-	out_buffer[4] = (req_ID) & 0xFF;	
-	out_buffer[3] = (first_row >> 24) & 0xFF;
-	out_buffer[2] = (first_row >> 16) & 0xFF;
-	out_buffer[1] = (first_row >> 8) & 0xFF;
-	out_buffer[0] = (first_row) & 0xFF;
+	out_buffer[3] = (cookie >> 24) & 0xFF;
+	out_buffer[2] = (cookie >> 16) & 0xFF;
+	out_buffer[1] = (cookie >> 8) & 0xFF;
+	out_buffer[0] = (cookie) & 0xFF;
+	out_buffer[7] = (vote_count >> 24) & 0xFF;
+	out_buffer[6] = (vote_count >> 16) & 0xFF;
+	out_buffer[5] = (vote_count >> 8) & 0xFF;
+	out_buffer[4] = (vote_count) & 0xFF;
+	out_buffer[11] = (candidate >> 24) & 0xFF;
+	out_buffer[10] = (candidate >> 16) & 0xFF;
+	out_buffer[9] = (candidate >> 8) & 0xFF;
+	out_buffer[8] = (candidate) & 0xFF;
+	out_buffer[15] = (check_sum >> 24) & 0xFF;
+	out_buffer[14] = (check_sum >> 16) & 0xFF;
+	out_buffer[13] = (check_sum >> 8) & 0xFF;
+	out_buffer[12] = (check_sum) & 0xFF;
+	out_buffer[19] = (req_ID >> 24) & 0xFF;
+	out_buffer[18] = (req_ID >> 16) & 0xFF;
+	out_buffer[17] = (req_ID >> 8) & 0xFF;
+	out_buffer[16] = (req_ID) & 0xFF;	
+	out_buffer[23] = (first_row >> 24) & 0xFF;
+	out_buffer[22] = (first_row >> 16) & 0xFF;
+	out_buffer[21] = (first_row >> 8) & 0xFF;
+	out_buffer[20] = (first_row) & 0xFF;
 }
 
 unsigned long getCheckSum(unsigned long tmpRe, unsigned long tmpCandi,
@@ -247,6 +247,7 @@ int sendall(int socket, char *buf, int *len)
 //The main client-server interaction loop
 void processClient(int clientSock)
 {
+	bool isGood = false;
 	unsigned short tmpMag;
 	unsigned char tmpFlag, tmpType;
   unsigned long tmpReq, tmpCSum, tmpCand, tmpVot, tmpCook;
@@ -293,35 +294,47 @@ void processClient(int clientSock)
 	
 	if(tmpMag != MAGIC){
 		cout << "Error. Magic is not.\n\n";
-		// do shit with bad msg
+		
+		// do shit with bad mag
+		tmpFlag |= 1 << 2;
+	}
+	if((tmpFlag >> 6) & 1){
+		tmpFlag |= 1 << 3;
 	}
 	// process flags
-	if(tmpFlag == 0){
+	if(!((tmpFlag >> 7) & 1)){
+		isGood = true;
 		cout << "No check_sum for this msg. Bad dog.\n\n";
 		// do shit for no checksum
-		
-	}else if(tmpFlag == 0xF0){
-		if(getCheckSum(tmpReq, tmpCand, tmpVot, tmpCook) != CSUM){
+		// process request
+	}else if(getCheckSum(tmpReq, tmpCand, tmpVot, tmpCook) != CSUM){
 			cout << "incorrect checksum. bad dog.\n\n";
-			// do shit for bad checksum
+			tmpFlag |= 1 << 1;
+			isGood = false;
+			//process error
+	}else{
+		isGood = true;
+	}	
+	if(isGood){
+		ntohl(tmpReq);
+		ntohl(tmpCand); 
+		ntohl(tmpVot);
+		ntohl(tmpCook);
+		
+		// do shit for good checksum
+		// check type
+		
+		// if inquiry do inquiry shit
+		if(tmpType == TYPEINQ) {
+			processInquiry(tmpCand);
+		}else if(tmpType == TYPEVOTE){
+			processVote(tmpCand);
+		// else record vote
 		}else{
-			ntohl(tmpReq);
-			ntohl(tmpCand); 
-			ntohl(tmpVot);
-			ntohl(tmpCook);
-			
-			// do shit for good checksum
-			// check type
-			// if inquiry do inquiry shit
-			if(tmpType == TYPEINQ) {
-				processInquiry(tmpCand);
-			}else{
-				processVote(tmpCand);
-			// else record vote
-			}
-		}			
-	}
-		// send reply shit
+			tmpFlag |= 1 << 0;
+		}
+	}			
+	// send reply shit
 }  
     
 void *threadMain(void *args)
