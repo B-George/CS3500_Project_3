@@ -10,9 +10,6 @@
 using namespace std;
 
 bool isValid(int guess)
-{
-  return (guess <= 9999 && guess >= 0);
-}
 
 //receive a long
 int recvLong(int sock, long &msg)
@@ -108,8 +105,8 @@ int main(int argc, char* argv[])
   strcpy(msg, msgStr.c_str());
   
   //submit it to the server
-  int bytesSent = send(sock, (void *) msg, 50, 0);
-  if(bytesSent != 50)
+  int bytesSent = send(sock, (void *) msg, 24, 0);
+  if(bytesSent != 24)
 	{
 	  cout << "bytesSent != 50" << endl;
 	  exit(-1);

@@ -30,7 +30,7 @@ struct req_IDs {
 	struct req_IDs *next;
 };
 
-req_IDs *root;
+struct req_IDs *root;
 
 
 bool cbit = false; // checksum flag
@@ -38,8 +38,8 @@ bool request = false; // bit 6 of flag field, 1 = response, 0 = request
 unsigned long first_row, req_ID, check_sum, candidate, vote_count, cookie;
 unsigned short magic = MAGIC;
 char flags, type;
-int out_buffer[6];
-int in_buffer[6];
+unsigned char out_buffer[24];
+unsigned char in_buffer[24];
 const unsigned long mask = 0;
 
 
@@ -183,12 +183,30 @@ void fillBuff()
 	vote_count = htonl(vote_count);
 	cookie = htonl(cookie);
 	check_sum= getCheckSum();
-	out_buffer[5] = cookie;
-	out_buffer[4] = vote_count;
-	out_buffer[3] = candidate;
-	out_buffer[2] = check_sum;
-	out_buffer[1] = req_ID;
-	out_buffer[0] = flags;
+	out_buffer[23] = (cookie >> 24) & 0xFF;
+	out_buffer[22] = (cookie >> 16) & 0xFF;
+	out_buffer[21] = (cookie >> 8) & 0xFF;
+	out_buffer[20] = (cookie) & 0xFF;
+	out_buffer[19] = (vote_count >> 24) & 0xFF;
+	out_buffer[18] = (vote_count >> 16) & 0xFF;
+	out_buffer[17] = (vote_count >> 8) & 0xFF;
+	out_buffer[16] = (vote_count) & 0xFF;
+	out_buffer[15] = (candidate >> 24) & 0xFF;
+	out_buffer[14] = (candidate >> 16) & 0xFF;
+	out_buffer[13] = (candidate >> 8) & 0xFF;
+	out_buffer[12] = (candidate) & 0xFF;
+	out_buffer[11] = (check_sum >> 24) & 0xFF;
+	out_buffer[10] = (check_sum >> 16) & 0xFF;
+	out_buffer[9] = (check_sum >> 8) & 0xFF;
+	out_buffer[8] = (check_sum) & 0xFF;
+	out_buffer[7] = (req_ID >> 24) & 0xFF;
+	out_buffer[6] = (req_ID >> 16) & 0xFF;
+	out_buffer[5] = (req_ID >> 8) & 0xFF;
+	out_buffer[4] = (req_ID) & 0xFF;	
+	out_buffer[3] = (first_row >> 24) & 0xFF;
+	out_buffer[2] = (first_row >> 16) & 0xFF;
+	out_buffer[1] = (first_row >> 8) & 0xFF;
+	out_buffer[0] = (first_row) & 0xFF;
 }
 
 unsigned long getCheckSum()

@@ -1,21 +1,53 @@
+// Benjamin George and Eli Gatchalian
+//
 #include <cstring>
 #include <cstdlib>
+#include <stdlib.h>
 #include <iostream>
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <string>
+#include <vector>
 #include <pthread.h>
 #include <errno.h>
 #include <semaphore.h>
 #include <stdio.h>
 
+#define REP(a,b) for(int i = a; a < b, a++);
+#define LENGTH 24
+#define TYPEVOTE 0x18
+#define TYPEINQ 0x08
+#define VOTECOUNT 0
+#define CSUM 0xdeadbeef
+#define MAGIC 0x023b
+#define PBIT 0
+#define MBIT 0 
+#define SBIT 0 
+#define TBIT 0 
+
 using namespace std;
 
+struct req_IDs {
+	unsigned long ID;
+	unsigned long response[6];
+	struct req_IDs *next;
+};
 
 
-//globals
+// globals
+struct req_IDs *root;
+
+bool cbit = false; // checksum flag
+bool request = false; // bit 6 of flag field, 1 = response, 0 = request
+unsigned long first_row, req_ID, check_sum, candidate, vote_count, cookie;
+unsigned short magic = MAGIC;
+char flags, type;
+unsigned char out_buffer[24];
+unsigned char in_buffer[24];
+const unsigned long mask = 0;
 
 pthread_mutex_t boardLock;
 
@@ -24,48 +56,32 @@ struct ThreadArgs
   int clientSock;
 };
 
+// sets first row of data(magic, flags, message type)
+void getFirstRow(unsigned short mag, char flag, char msg_type); 
+
+// place bytes in buffer
+void fillBuff();
+
+// calculate checksum
+unsigned long getCheckSum();
+
+// send all bits in buffer
+// socket == socket to send data to
+// buf == data buffer
+// *len == pointer to buffer length in bytes (int)
+int sendall(int socket, char *buf, int *len);
+
+
+
 //Send a long over the socket
-int sendLong(int clientSock, long num)
-{
-  long networkNum = htonl(num);
-	
-  int bytesSent = send(clientSock, (void *) &networkNum,
-					   sizeof(long), 0);
-  if(bytesSent != sizeof(long))
-	{
-	  return -1;
-	}
-  return 0;
-}
+int sendLong(int clientSock, long num);
 
 //Receive a long over the socket
-int recvLong(int clientSock, long &msg)
-{
-  int bytesLeft = sizeof(long);
-  long networkMsg;
-  char* gp = (char *) &networkMsg;
-
-  while(bytesLeft)
-	{
-	  int bytesRecv = recv(clientSock, gp,
-						   bytesLeft, 0);
-	  if(bytesRecv <= 0)
-		{
-		  return -1;
-		}
-	  bytesLeft = bytesLeft - bytesRecv;
-	  gp = gp + bytesRecv;
-	}
-  msg = ntohl(networkMsg);
-  return 0;
-}
+int recvLong(int clientSock, long &msg);
 
 //The main client-server interaction loop
 void processClient(int clientSock)
 {
-  //get client name
-
-  cout << "Receiving player name..." << endl;
   
   int bytesLeft = 24;
   char buffer[24];
@@ -234,5 +250,97 @@ int main(int argc, char* argv[])
 		}
 	}
   
+  return 0;
+}
+
+void fillBuff()
+{
+	first_row = htonl(first_row);
+	req_ID = htonl(req_ID);
+	candidate = htonl(candidate);
+	vote_count = htonl(vote_count);
+	cookie = htonl(cookie);
+	check_sum= getCheckSum();
+	out_buffer[23] = (cookie >> 24) & 0xFF;
+	out_buffer[22] = (cookie >> 16) & 0xFF;
+	out_buffer[21] = (cookie >> 8) & 0xFF;
+	out_buffer[20] = (cookie) & 0xFF;
+	out_buffer[19] = (vote_count >> 24) & 0xFF;
+	out_buffer[18] = (vote_count >> 16) & 0xFF;
+	out_buffer[17] = (vote_count >> 8) & 0xFF;
+	out_buffer[16] = (vote_count) & 0xFF;
+	out_buffer[15] = (candidate >> 24) & 0xFF;
+	out_buffer[14] = (candidate >> 16) & 0xFF;
+	out_buffer[13] = (candidate >> 8) & 0xFF;
+	out_buffer[12] = (candidate) & 0xFF;
+	out_buffer[11] = (check_sum >> 24) & 0xFF;
+	out_buffer[10] = (check_sum >> 16) & 0xFF;
+	out_buffer[9] = (check_sum >> 8) & 0xFF;
+	out_buffer[8] = (check_sum) & 0xFF;
+	out_buffer[7] = (req_ID >> 24) & 0xFF;
+	out_buffer[6] = (req_ID >> 16) & 0xFF;
+	out_buffer[5] = (req_ID >> 8) & 0xFF;
+	out_buffer[4] = (req_ID) & 0xFF;	
+	out_buffer[3] = (first_row >> 24) & 0xFF;
+	out_buffer[2] = (first_row >> 16) & 0xFF;
+	out_buffer[1] = (first_row >> 8) & 0xFF;
+	out_buffer[0] = (first_row) & 0xFF;
+}
+
+unsigned long getCheckSum()
+{
+	return CSUM ^ first_row ^ req_ID ^ candidate ^ vote_count ^ cookie;
+}
+
+int sendall(int socket, char *buf, int *len)
+{
+		int total = 0;
+		int bytesleft = *len;
+		int n;
+		
+		while(total < *len) {
+			n = send(socket, buf+total, bytesleft, 0);
+			if (n == -1) {break; }
+			total += n;
+			bytesleft -= n;
+		}
+
+		*len = total;
+		return n == -1?-1:0; // return -1 on failure, 0 on success
+}
+
+//Send a long over the socket
+int sendLong(int clientSock, long num)
+{
+  long networkNum = htonl(num);
+	
+  int bytesSent = send(clientSock, (void *) &networkNum,
+					   sizeof(long), 0);
+  if(bytesSent != sizeof(long))
+	{
+	  return -1;
+	}
+  return 0;
+}
+
+//Receive a long over the socket
+int recvLong(int clientSock, long &msg)
+{
+  int bytesLeft = sizeof(long);
+  long networkMsg;
+  char* gp = (char *) &networkMsg;
+
+  while(bytesLeft)
+	{
+	  int bytesRecv = recv(clientSock, gp,
+						   bytesLeft, 0);
+	  if(bytesRecv <= 0)
+		{
+		  return -1;
+		}
+	  bytesLeft = bytesLeft - bytesRecv;
+	  gp = gp + bytesRecv;
+	}
+  msg = ntohl(networkMsg);
   return 0;
 }
