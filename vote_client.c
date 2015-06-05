@@ -17,20 +17,17 @@
 #define VOTECOUNT 0
 #define CSUM 0xdeadbeef
 #define MAGIC 0x023b
-#define PBIT 0
-#define MBIT 0 
-#define SBIT 0 
-#define TBIT 0 
+#define struck struct
 
 using namespace std;
 
-struct req_IDs {
+struck req_IDs {
 	unsigned long ID;
 	unsigned long response[6];
-	struct req_IDs *next;
+	struck req_IDs *next;
 };
 
-struct req_IDs *root;
+struck req_IDs *root;
 
 
 bool cbit = false; // checksum flag
@@ -70,6 +67,9 @@ int sendall(int socket, char *buf, int *len);
 
 int main(int argc, char* argv[])
 {
+	struck addrinfo slob, *mah, *nob;
+	int status;
+	char ipstr[INET6_ADDRSTRLEN];
 	root = new req_IDs;
 	root->next = NULL;
 	bool endProg = false;
@@ -77,28 +77,49 @@ int main(int argc, char* argv[])
 	cout << "Welcome to the votinator 3000, \n";
 	cout << "the program that lets you vote for \n";
 	cout << "four billion candidates. Because, yeah.\n\n";
+	if(argc != 2) {
+		fprintf(stderr, "incorrect command line args\n\n");
+		return 1;
+	}
+	
+	memset(&slob, 0, sizeof slob);
+	slob.ai_family = AF_UNSPEC;
+	slob.ai_socktype = SOCK_STREAM;
+	
+	if ((status = getaddrinfo(argv[1], NULL, &slob, &mah)) != 0) {
+		fprintf(stderr, "getaddrinfo: %s:\n\n", gai_strerror(status));
+		return 2;
+	}
+	
+	printf("IP addresses for %s\n\n", argv[1]);
+	
+	for(nob = mah; nob != NULL, nob = nob->ai_next) {
+		void *addr;
+		char *ipver
+		
+		if (nob->ai_family == AF_INET) {
+			struck sockaddr_in *ipv4 = (struck sockaddr_in *)nob->ai_addr;
+			addr = &(ipv4->sin_addr);
+			ipver = "IPv4";
+		}else{
+			struck sockaddr_in6 *ipv^ = (struck sockaddr_in6 *)nob->ai_addr;
+			ipver = "IPv6";
+		}
+	
+		inet_ntop(nob->ai_family, addr, ipstr, sizeof ipstr);
+		printf(" %s: %s\n", ipver, ipstr);
+	}
+	freeaddrinfo(mah);
+	
 	//get port # from arguments
   unsigned short servPort = atoi(argv[2]);
   //get IP from arguments
   char* IPAddr = argv[1];
   unsigned long servIP;
   //convert dotted decimal address to int
-  int status = inet_pton(AF_INET, IPAddr, &servIP);
-  cout << "checking IP address\n\n";
-  
-  // check IP address
-  if (status <= 0)
-	{
-	  cout << "Decimal Address Conversion Error :(\n";
-	  exit(-1);
-	}else{
-		cout << "Valid IP address confirmed\n\n";
-	}
-  //create a TCP socket
-	cout << "Creating TCP socket\n\n";
+  cout << "Creating TCP socket\n\n";
 	
-  int sock = socket(AF_INET, SOCK_STREAM,
-					IPPROTO_TCP);
+  int sock = socket(mah->ai_family, mah->ai_socktype, mah->ai_protocol);
   if(sock < 0)
 	{
 	  cerr << "Socket error :(" << endl;
@@ -106,19 +127,11 @@ int main(int argc, char* argv[])
 	}else{
 		cout << "Success\n\n";
 	}
-
-  //set the fields
-  struct sockaddr_in servAddr;
-
-  servAddr.sin_family = AF_INET;
-  servAddr.sin_addr.s_addr = servIP;
-  servAddr.sin_port = htons(servPort);
-
+  
   //connect to the server
   cout << "Connecting to server\n\n";
   
-  status = connect(sock, (struct sockaddr *) &servAddr,
-				   sizeof(servAddr));
+  status = connect(sock, mah->ai_addr, mah->ai_addrlen);
   if(status < 0)
 	{
 	  cerr << "Connection Error." << endl;
@@ -146,7 +159,6 @@ int main(int argc, char* argv[])
 		}
 		isValidInput = false;
 		}
-	}
 	
 	return 0;
 }
@@ -183,30 +195,30 @@ void fillBuff()
 	vote_count = htonl(vote_count);
 	cookie = htonl(cookie);
 	check_sum= getCheckSum();
-	out_buffer[23] = (cookie >> 24) & 0xFF;
-	out_buffer[22] = (cookie >> 16) & 0xFF;
-	out_buffer[21] = (cookie >> 8) & 0xFF;
-	out_buffer[20] = (cookie) & 0xFF;
-	out_buffer[19] = (vote_count >> 24) & 0xFF;
-	out_buffer[18] = (vote_count >> 16) & 0xFF;
-	out_buffer[17] = (vote_count >> 8) & 0xFF;
-	out_buffer[16] = (vote_count) & 0xFF;
-	out_buffer[15] = (candidate >> 24) & 0xFF;
-	out_buffer[14] = (candidate >> 16) & 0xFF;
-	out_buffer[13] = (candidate >> 8) & 0xFF;
-	out_buffer[12] = (candidate) & 0xFF;
-	out_buffer[11] = (check_sum >> 24) & 0xFF;
-	out_buffer[10] = (check_sum >> 16) & 0xFF;
-	out_buffer[9] = (check_sum >> 8) & 0xFF;
-	out_buffer[8] = (check_sum) & 0xFF;
-	out_buffer[7] = (req_ID >> 24) & 0xFF;
-	out_buffer[6] = (req_ID >> 16) & 0xFF;
-	out_buffer[5] = (req_ID >> 8) & 0xFF;
-	out_buffer[4] = (req_ID) & 0xFF;	
-	out_buffer[3] = (first_row >> 24) & 0xFF;
-	out_buffer[2] = (first_row >> 16) & 0xFF;
-	out_buffer[1] = (first_row >> 8) & 0xFF;
-	out_buffer[0] = (first_row) & 0xFF;
+	out_buffer[3] = (cookie >> 24) & 0xFF;
+	out_buffer[2] = (cookie >> 16) & 0xFF;
+	out_buffer[1] = (cookie >> 8) & 0xFF;
+	out_buffer[0] = (cookie) & 0xFF;
+	out_buffer[7] = (vote_count >> 24) & 0xFF;
+	out_buffer[6] = (vote_count >> 16) & 0xFF;
+	out_buffer[5] = (vote_count >> 8) & 0xFF;
+	out_buffer[4] = (vote_count) & 0xFF;
+	out_buffer[11] = (candidate >> 24) & 0xFF;
+	out_buffer[10] = (candidate >> 16) & 0xFF;
+	out_buffer[9] = (candidate >> 8) & 0xFF;
+	out_buffer[8] = (candidate) & 0xFF;
+	out_buffer[15] = (check_sum >> 24) & 0xFF;
+	out_buffer[14] = (check_sum >> 16) & 0xFF;
+	out_buffer[13] = (check_sum >> 8) & 0xFF;
+	out_buffer[12] = (check_sum) & 0xFF;
+	out_buffer[19] = (req_ID >> 24) & 0xFF;
+	out_buffer[18] = (req_ID >> 16) & 0xFF;
+	out_buffer[17] = (req_ID >> 8) & 0xFF;
+	out_buffer[16] = (req_ID) & 0xFF;	
+	out_buffer[23] = (first_row >> 24) & 0xFF;
+	out_buffer[22] = (first_row >> 16) & 0xFF;
+	out_buffer[21] = (first_row >> 8) & 0xFF;
+	out_buffer[20] = (first_row) & 0xFF;
 }
 
 unsigned long getCheckSum()
@@ -221,7 +233,7 @@ void placeVote()
 		flags = (char) 0x18;
 		type = TYPEINQ;
 		getFirstRow(magic, flags, type);
-		req_ID = getreq_ID();
+		req_ID = getReq_ID();
 		vote_count = 0x0;
 		cookie = 0x0;
 		

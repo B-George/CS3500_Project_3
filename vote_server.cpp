@@ -412,3 +412,4 @@ void processVote(unsigned long r, unsigned long c,
 	candidate_info[hashNo].VoteCount = vc;
 	candidate_info[hashNo].Cookie = omnomnomnomnom;
 }
+
