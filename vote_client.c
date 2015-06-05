@@ -39,8 +39,11 @@ char flags, type;
 unsigned char out_buffer[24];
 unsigned char in_buffer[24];
 const unsigned long mask = 0;
-
-
+unsigned int num_f_u_ = 0;
+unsigned int numMsgTot = 0;
+unsigned int numVotes = 0;
+unsigned int numInq = 0;
+int sock;
 
 // sets first row of data(magic, flags, message type)
 void setFirstRow(unsigned short mag, char flag, char msg_type); 
@@ -58,13 +61,20 @@ void placeVote();
 void getStats();
 
 // calculate checksum
-unsigned long getCheckSum();
+unsigned long getCheckSum(unsigned long tmpRe, unsigned long tmpCandi,
+							unsigned long tmpVC, unsigned long tmpCk);
 
 // send all bits in buffer
 // socket == socket to send data to
 // buf == data buffer
 // *len == pointer to buffer length in bytes (int)
 int sendall(int socket, char *buf, int *len);
+
+// receive response from server
+void recvall(int socket);
+
+// display voting statistics
+void displayStats();
 
 int main(int argc, char* argv[])
 {
@@ -88,14 +98,14 @@ int main(int argc, char* argv[])
 	slob.ai_family = AF_UNSPEC;
 	slob.ai_socktype = SOCK_STREAM;
 	
-	if ((status = getaddrinfo(argv[1], NULL, &slob, &mah)) != 0) {
+	if ((status = getaddrinfo(argv[1], argv[2], &slob, &mah)) != 0) {
 		fprintf(stderr, "getaddrinfo: %s:\n\n", gai_strerror(status));
 		return 2;
 	}
 	
 	printf("IP addresses for %s\n\n", argv[1]);
 	
-	for(nob = mah; nob != NULL, nob = nob->ai_next) {
+	for(nob = mah; nob != NULL; nob = nob->ai_next) {
 		void *addr;
 		char *ipver;
 		
@@ -104,7 +114,7 @@ int main(int argc, char* argv[])
 			addr = &(ipv4->sin_addr);
 			ipver = "IPv4";
 		}else{
-			struck sockaddr_in6 *ipv^ = (struck sockaddr_in6 *)nob->ai_addr;
+			struck sockaddr_in6 *ipv6 = (struck sockaddr_in6 *)nob->ai_addr;
 			ipver = "IPv6";
 		}
 	
@@ -121,7 +131,7 @@ int main(int argc, char* argv[])
   //convert dotted decimal address to int
   cout << "Creating TCP socket\n\n";
 	
-  int sock = socket(AF_INET, SOCK_STREAM,
+ sock = socket(AF_INET, SOCK_STREAM,
 					IPPROTO_TCP);
   if(sock < 0)
 	{
@@ -143,10 +153,10 @@ int main(int argc, char* argv[])
 	}else{
 		cout << "Connection successful\n\n";
 	}
-	
+	int input;
 	while(!endProg) {
 		while(!isValidInput) {
-			int input;
+			
 			cout << "To vote for a number, type 1\n\n";
 			cout << "To get voting statistics, type 2\n\n";
 			cin >> input;
@@ -161,8 +171,15 @@ int main(int argc, char* argv[])
 			}
 		}
 		isValidInput = false;
+		cout << "Would you like to vote again?\n");
+		cout << "Type 1 for yes, 0 for no\n\n");
+		cin >> input;
+		if( input == 0 ) {
+			endProg = true;
 		}
-	
+	}
+	displayStats();
+		
 	return 0;
 }
 
@@ -227,9 +244,10 @@ void fillBuff()
 	out_buffer[0] = (cookie) & 0xFF;
 }
 
-unsigned long getCheckSum()
+unsigned long getCheckSum(unsigned long tmpRe, unsigned long tmpCandi,
+							unsigned long tmpVC, unsigned long tmpCk)
 {
-	return CSUM ^ req_ID ^ candidate ^ vote_count ^ cookie;
+	return CSUM ^ tmpRe ^ tmpCandi ^ tmpVC ^ tmpCk;
 }
 
 void placeVote()
@@ -237,10 +255,11 @@ void placeVote()
 	//set first row bytes -- magic = MAGIC, flags = 0x18, type = TYPEINQ
 		magic = MAGIC;
 		// 20% chance of sending error
-		if( (rand() % 10) > 1) { 
+		if( (rand() % 10) > 1) { // 80% chance of good
 		flags = (char) 0x18;
 		} else {
 			flags = (char) 0x23;
+			num_f_u_++;
 		}
 		type = TYPEINQ;
 		setFirstRow(magic, flags, type);
@@ -251,6 +270,10 @@ void placeVote()
 	cout << "Please enter a candidate number between 0x0 and 0xFFFFFFFF: ";
 	cin >> hex >> candidate;
 	cout << "candidate: " << candidate << endl;
+	fillBuff();
+	sendall();
+	recvall();
+	numVotes++;
 }
 
 void getStats()
@@ -262,6 +285,7 @@ void getStats()
 		flags = (char) 0x08;
 	} else {
 		flags = (char) 0xF0;
+		num_f_u_++:
 	}
 	type = TYPEINQ;
 	setFirstRow(magic, flags, type);
@@ -269,6 +293,10 @@ void getStats()
 	candidate = 0x0;
 	vote_count = 0x0;
 	cookie = 0x0;
+	fillBuff();
+	sendall();
+	recvall();
+	numInq++;	
 }
 
 int sendall(int socket)
@@ -283,6 +311,97 @@ int sendall(int socket)
 			total += n;
 			bytesleft -= n;
 		}
-
+		numMsgTot++;
 		return n == -1?-1:0; // return -1 on failure, 0 on success
+}
+
+void recvall(int clientSock)
+{
+	bool isGood = false;
+	unsigned short tmpMag;
+	unsigned char tmpFlag, tmpType;
+  unsigned long tmpReq, tmpCSum, tmpCand, tmpVot, tmpCook;
+  int bytesLeft = 24;
+  char buffer[24];
+  char* bp = buffer;
+  while(bytesLeft > 0)
+	{
+	  int bytesRecv = recv(clientSock, &buffer[24-bytesLeft],
+						   bytesLeft, 0);
+	  if(bytesRecv <= 0)
+		{
+		  cout << "Probable client disconnect" << endl;
+		  return;
+		}
+	  bytesLeft = bytesLeft - bytesRecv;
+	}
+ //**** process buffer 
+	tmpFR = (buffer[23] << 24) + (buffer[22] << 16) + (buffer[21] << 8) + (buffer[20]);
+	tmpMag = (buffer[23] << 8) + (buffer[22]);
+	tmpFlag = buffer[21];
+	tmpType = buffer[20];
+	tmpReq = (buffer[19] << 24) + (buffer[18] << 16) + (buffer[17] << 8) + (buffer[16]);
+	tmpCSum = (buffer[15] << 24) + (buffer[14] << 16) + (buffer[13] << 8) + (buffer[12]);
+	tmpCand = (buffer[11] << 24) + (buffer[10] << 16) + (buffer[9] << 8) + (buffer[8]);
+	tmpVot = (buffer[7] << 24) + (buffer[6] << 16) + (buffer[5] << 8) + (buffer[4]);
+	tmpCook = (buffer[3] << 24) + (buffer[2] << 16) + (buffer[1] << 8) + (buffer[0]);
+	
+	#if DEBUG == 1
+		cout << "\nmessage contents\nmagic = " << tmpMag << endl;
+		cout << "Flag = " << tmpFlag << endl;
+		cout << "Type = " << tmpType << endl;
+		cout << "Req_ID = " << tmpReq << endl;
+		cout << "check_sum = " << tmpCSum << endl;
+		cout << "candidate = " << tmpCand << endl;
+		cout << "vote ct = " << tmpVot << endl;
+		cout << "cookie = " << tmpCook << endl << endl;
+	#endif
+	
+	ntohs(tmpMag);
+	
+	tmpCSum = getCheckSum(tmpReq, tmpCand, tmpVot, tmpCook)
+	
+		ntohl(tmpReq);
+		ntohl(tmpCand); 
+		ntohl(tmpVot);
+		ntohl(tmpCook);
+		req_IDs *temp;
+		temp = root;
+		while( temp ) 
+			temp = temp->next;
+		temp.response[0] = tmpFR;
+		temp.response[2] = tmpCSum;
+		temp.response[1] = tmpReq
+		temp.response[3] = tmpCand;
+		temp.response[4] = tmpVot;
+		temp.response[5] = tmpCook;
+		temp->next = NULL;
+}
+
+void displayStats()
+{
+	req_IDs *temp;
+	temp = root;
+	
+	cout << "Thank you for using the votinator 3000\n";
+	cout << "You sent " << numMsgTot << "messages.\n";
+	cout << num_f_u_ << " Of which were erroneous.\n";
+	cout << numVotes << " Were votes, " << numInq << " were inquiries\n\n";
+	cout << "Your voting and inquiry record follows\n\n\n";
+	string tp;
+	while( temp != NULL ) {
+		unsigned char reqType;
+		reqType = 0xFF & temp.response[0];
+		if( reqType == TYPEINQ ) {
+			tp = "Inquiry\n";
+		} else if( reqType == TYPEVOTE ) {
+			tp = "Vote\n";
+		} else {
+			tp = "Invalid request\n";
+		}
+		cout << "\nRequest type: " << tp;
+		cout << "Candidate #: " << temp.response[3];
+		cout << "\nCookie :" << temp.response[5] << endl << endl;
+		temp = temp->next;
+	}
 }
