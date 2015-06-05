@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netdb.h>
 #include <unistd.h>
 #include <string>
 #include <vector>
@@ -42,10 +43,10 @@ const unsigned long mask = 0;
 
 
 // sets first row of data(magic, flags, message type)
-void getFirstRow(unsigned short mag, char flag, char msg_type); 
+void setFirstRow(unsigned short mag, char flag, char msg_type); 
 
 // assigns random 32 bit # to req_ID and stores in vector;
-unsigned long getReq_ID();
+unsigned long setReq_ID();
 
 // place bytes in buffer
 void fillBuff();
@@ -77,7 +78,8 @@ int main(int argc, char* argv[])
 	cout << "Welcome to the votinator 3000, \n";
 	cout << "the program that lets you vote for \n";
 	cout << "four billion candidates. Because, yeah.\n\n";
-	if(argc != 2) {
+	
+	if(argc != 3) {
 		fprintf(stderr, "incorrect command line args\n\n");
 		return 1;
 	}
@@ -95,7 +97,7 @@ int main(int argc, char* argv[])
 	
 	for(nob = mah; nob != NULL, nob = nob->ai_next) {
 		void *addr;
-		char *ipver
+		char *ipver;
 		
 		if (nob->ai_family == AF_INET) {
 			struck sockaddr_in *ipv4 = (struck sockaddr_in *)nob->ai_addr;
@@ -119,7 +121,8 @@ int main(int argc, char* argv[])
   //convert dotted decimal address to int
   cout << "Creating TCP socket\n\n";
 	
-  int sock = socket(mah->ai_family, mah->ai_socktype, mah->ai_protocol);
+  int sock = socket(AF_INET, SOCK_STREAM,
+					IPPROTO_TCP);
   if(sock < 0)
 	{
 	  cerr << "Socket error :(" << endl;
@@ -163,7 +166,7 @@ int main(int argc, char* argv[])
 	return 0;
 }
 
-void getFirstRow(unsigned short mag, char flag, char msg_type)
+void setFirstRow(unsigned short mag, char flag, char msg_type)
 {
 	char buffer[4];
 	buffer[0] = msg_type;
@@ -173,7 +176,7 @@ void getFirstRow(unsigned short mag, char flag, char msg_type)
 	memcpy(&first_row, buffer, sizeof(long));
 }
 
-unsigned long getReq_ID()
+unsigned long setReq_ID()
 {
 	req_IDs *temp;
 	temp = root;
@@ -189,51 +192,59 @@ unsigned long getReq_ID()
 
 void fillBuff()
 {
+	// set rows and convert to network byte order
 	first_row = htonl(first_row);
 	req_ID = htonl(req_ID);
 	candidate = htonl(candidate);
 	vote_count = htonl(vote_count);
 	cookie = htonl(cookie);
 	check_sum= getCheckSum();
-	out_buffer[3] = (cookie >> 24) & 0xFF;
-	out_buffer[2] = (cookie >> 16) & 0xFF;
-	out_buffer[1] = (cookie >> 8) & 0xFF;
-	out_buffer[0] = (cookie) & 0xFF;
-	out_buffer[7] = (vote_count >> 24) & 0xFF;
-	out_buffer[6] = (vote_count >> 16) & 0xFF;
-	out_buffer[5] = (vote_count >> 8) & 0xFF;
-	out_buffer[4] = (vote_count) & 0xFF;
-	out_buffer[11] = (candidate >> 24) & 0xFF;
-	out_buffer[10] = (candidate >> 16) & 0xFF;
-	out_buffer[9] = (candidate >> 8) & 0xFF;
-	out_buffer[8] = (candidate) & 0xFF;
-	out_buffer[15] = (check_sum >> 24) & 0xFF;
-	out_buffer[14] = (check_sum >> 16) & 0xFF;
-	out_buffer[13] = (check_sum >> 8) & 0xFF;
-	out_buffer[12] = (check_sum) & 0xFF;
-	out_buffer[19] = (req_ID >> 24) & 0xFF;
-	out_buffer[18] = (req_ID >> 16) & 0xFF;
-	out_buffer[17] = (req_ID >> 8) & 0xFF;
-	out_buffer[16] = (req_ID) & 0xFF;	
+
+	// set the outgoing buffer
 	out_buffer[23] = (first_row >> 24) & 0xFF;
 	out_buffer[22] = (first_row >> 16) & 0xFF;
 	out_buffer[21] = (first_row >> 8) & 0xFF;
 	out_buffer[20] = (first_row) & 0xFF;
+	out_buffer[19] = (req_ID >> 24) & 0xFF;
+	out_buffer[18] = (req_ID >> 16) & 0xFF;
+	out_buffer[17] = (req_ID >> 8) & 0xFF;
+	out_buffer[16] = (req_ID) & 0xFF;	
+	out_buffer[15] = (check_sum >> 24) & 0xFF;
+	out_buffer[14] = (check_sum >> 16) & 0xFF;
+	out_buffer[13] = (check_sum >> 8) & 0xFF;
+	out_buffer[12] = (check_sum) & 0xFF;
+	out_buffer[11] = (candidate >> 24) & 0xFF;
+	out_buffer[10] = (candidate >> 16) & 0xFF;
+	out_buffer[9] = (candidate >> 8) & 0xFF;
+	out_buffer[8] = (candidate) & 0xFF;
+	out_buffer[7] = (vote_count >> 24) & 0xFF;
+	out_buffer[6] = (vote_count >> 16) & 0xFF;
+	out_buffer[5] = (vote_count >> 8) & 0xFF;
+	out_buffer[4] = (vote_count) & 0xFF;
+	out_buffer[3] = (cookie >> 24) & 0xFF;
+	out_buffer[2] = (cookie >> 16) & 0xFF;
+	out_buffer[1] = (cookie >> 8) & 0xFF;
+	out_buffer[0] = (cookie) & 0xFF;
 }
 
 unsigned long getCheckSum()
 {
-	return CSUM ^ first_row ^ req_ID ^ candidate ^ vote_count ^ cookie;
+	return CSUM ^ req_ID ^ candidate ^ vote_count ^ cookie;
 }
 
 void placeVote()
 {
 	//set first row bytes -- magic = MAGIC, flags = 0x18, type = TYPEINQ
 		magic = MAGIC;
+		// 20% chance of sending error
+		if( (rand() % 10) > 1) { 
 		flags = (char) 0x18;
+		} else {
+			flags = (char) 0x23;
+		}
 		type = TYPEINQ;
-		getFirstRow(magic, flags, type);
-		req_ID = getReq_ID();
+		setFirstRow(magic, flags, type);
+		req_ID = setReq_ID();
 		vote_count = 0x0;
 		cookie = 0x0;
 		
@@ -246,29 +257,32 @@ void getStats()
 {
 	//set first row bytes -- magic = MAGIC, flags = 0x08, type = TYPEINQ
 		magic = MAGIC;
+	// 20% chance of sending error
+	if( (rand() % 10) > 1) { 
 		flags = (char) 0x08;
-		type = TYPEINQ;
-		getFirstRow(magic, flags, type);
-		req_ID = rand();
-		candidate = 0x0;
-		vote_count = 0x0;
-		cookie = 0x0;
-				
+	} else {
+		flags = (char) 0xF0;
+	}
+	type = TYPEINQ;
+	setFirstRow(magic, flags, type);
+	req_ID = rand();
+	candidate = 0x0;
+	vote_count = 0x0;
+	cookie = 0x0;
 }
 
-int sendall(int socket, char *buf, int *len)
+int sendall(int socket)
 {
 		int total = 0;
-		int bytesleft = *len;
+		int bytesleft = LENGTH;
 		int n;
 		
-		while(total < *len) {
-			n = send(socket, buf+total, bytesleft, 0);
+		while(total < LENGTH) {
+			n = send(socket, out_buffer+total, bytesleft, 0);
 			if (n == -1) {break; }
 			total += n;
 			bytesleft -= n;
 		}
 
-		*len = total;
 		return n == -1?-1:0; // return -1 on failure, 0 on success
 }

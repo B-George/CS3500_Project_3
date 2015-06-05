@@ -208,36 +208,39 @@ void setFirstRow(unsigned short mag, char flag, char msg_type)
 
 void fillBuff()
 {
+	// set rows and convert to network byte order
 	first_row = htonl(first_row);
 	req_ID = htonl(req_ID);
 	candidate = htonl(candidate);
 	vote_count = htonl(vote_count);
 	cookie = htonl(cookie);
 	check_sum = getCheckSum(req_ID, candidate, vote_count, cookie);
-	out_buffer[3] = (cookie >> 24) & 0xFF;
-	out_buffer[2] = (cookie >> 16) & 0xFF;
-	out_buffer[1] = (cookie >> 8) & 0xFF;
-	out_buffer[0] = (cookie) & 0xFF;
-	out_buffer[7] = (vote_count >> 24) & 0xFF;
-	out_buffer[6] = (vote_count >> 16) & 0xFF;
-	out_buffer[5] = (vote_count >> 8) & 0xFF;
-	out_buffer[4] = (vote_count) & 0xFF;
-	out_buffer[11] = (candidate >> 24) & 0xFF;
-	out_buffer[10] = (candidate >> 16) & 0xFF;
-	out_buffer[9] = (candidate >> 8) & 0xFF;
-	out_buffer[8] = (candidate) & 0xFF;
-	out_buffer[15] = (check_sum >> 24) & 0xFF;
-	out_buffer[14] = (check_sum >> 16) & 0xFF;
-	out_buffer[13] = (check_sum >> 8) & 0xFF;
-	out_buffer[12] = (check_sum) & 0xFF;
-	out_buffer[19] = (req_ID >> 24) & 0xFF;
-	out_buffer[18] = (req_ID >> 16) & 0xFF;
-	out_buffer[17] = (req_ID >> 8) & 0xFF;
-	out_buffer[16] = (req_ID) & 0xFF;	
+	
+	// set the outgoing buffer
 	out_buffer[23] = (first_row >> 24) & 0xFF;
 	out_buffer[22] = (first_row >> 16) & 0xFF;
 	out_buffer[21] = (first_row >> 8) & 0xFF;
 	out_buffer[20] = (first_row) & 0xFF;
+	out_buffer[19] = (req_ID >> 24) & 0xFF;
+	out_buffer[18] = (req_ID >> 16) & 0xFF;
+	out_buffer[17] = (req_ID >> 8) & 0xFF;
+	out_buffer[16] = (req_ID) & 0xFF;	
+	out_buffer[15] = (check_sum >> 24) & 0xFF;
+	out_buffer[14] = (check_sum >> 16) & 0xFF;
+	out_buffer[13] = (check_sum >> 8) & 0xFF;
+	out_buffer[12] = (check_sum) & 0xFF;
+	out_buffer[11] = (candidate >> 24) & 0xFF;
+	out_buffer[10] = (candidate >> 16) & 0xFF;
+	out_buffer[9] = (candidate >> 8) & 0xFF;
+	out_buffer[8] = (candidate) & 0xFF;
+	out_buffer[7] = (vote_count >> 24) & 0xFF;
+	out_buffer[6] = (vote_count >> 16) & 0xFF;
+	out_buffer[5] = (vote_count >> 8) & 0xFF;
+	out_buffer[4] = (vote_count) & 0xFF;
+	out_buffer[3] = (cookie >> 24) & 0xFF;
+	out_buffer[2] = (cookie >> 16) & 0xFF;
+	out_buffer[1] = (cookie >> 8) & 0xFF;
+	out_buffer[0] = (cookie) & 0xFF;
 }
 
 unsigned long getCheckSum(unsigned long tmpRe, unsigned long tmpCandi,
