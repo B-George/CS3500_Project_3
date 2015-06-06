@@ -178,7 +178,7 @@ int main(int argc, char* argv[])
 			endProg = true;
 		}
 	}
-	displayStats();
+	displayStats(); 
 		
 	return 0;
 }
@@ -378,6 +378,7 @@ void recvall()
 
 void displayStats()
 {
+	// set up ll
 	req_IDs *temp;
 	temp = root;
 	
