@@ -15,6 +15,7 @@
 #include <errno.h>
 #include <semaphore.h>
 #include <stdio.h>
+#include <signal.h>
 
 #define REP(a,b) for(int i = a; a < b, a++);
 #define TYPEVOTE 0x18
@@ -27,10 +28,11 @@
 #define SBIT 0 
 #define TBIT 0 
 #define DEBUG 1
+#define struck struct
 
 using namespace std;
 
-struct vote_msg {
+struck vote_msg {
 	unsigned long ReqID, Candidate, VoteCount, Cookie;
 };
 
@@ -41,6 +43,7 @@ const int LENGTH = 24;
 
 vote_msg candidate_info[65536];
 
+int sighandle = 1;
 bool cbit = false; // checksum flag
 bool request = false; // bit 6 of flag field, 1 = response, 0 = request
 unsigned long first_row, req_ID, check_sum, candidate, vote_count, cookie;
@@ -48,11 +51,15 @@ unsigned short magic = MAGIC;
 char flags, type;
 unsigned char out_buffer[24];
 unsigned char in_buffer[24];
-const unsigned long mask = 0;
+unsigned int numMsg = 0;
+unsigned int numVotes = 0;
+unsigned int numInq = 0;
+unsigned int num_f_u_ = 0;
+int sock;
 
 pthread_mutex_t boardLock;
 
-struct ThreadArgs
+struck ThreadArgs
 {
   int clientSock;
 };
@@ -95,8 +102,18 @@ void processInquiry(unsigned long r, unsigned long c, unsigned char f);
 void processVote(unsigned long r, unsigned long c, 
 				unsigned long vc, unsigned long omnomnomnomnom);
 
+// signal handler
+void handler(int s);
+
+// display statistics
+void printStats();
+
+// craft and send reply
+void sendReply(int clientSock);
+
 int main(int argc, char* argv[])
 {
+	signal(SIGINT, handler);
   //check for proper number of
   //CL arguments
 
@@ -118,27 +135,27 @@ int main(int argc, char* argv[])
   cout << "Server!" << endl;
   
   cout << "Port passed was " << servPort << endl;
-  cout << "Creating Socket..." << endl;
+  cout << "Creating Socket...\n\n";
 
   //Create socket
 
-  int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if( sock < 0)
 	{
-	  cerr << "Could not create socket." << endl;
+	  cerr << "Could not create socket.\n\n";
 	  exit(-1);
 	}
-  cout << "Socket created, configuring and binding..." << endl;
+  cout << "Socket created, configuring and binding...\n\n";
   //Assign the port to socket and set
   //the fields
-  struct sockaddr_in servAddr;
+  struck sockaddr_in servAddr;
   servAddr.sin_family = AF_INET;
   servAddr.sin_addr.s_addr = htonl(INADDR_ANY);
   servAddr.sin_port = htons(servPort);
 
   //bind!
   int status = bind(sock,
-					(struct sockaddr *) &servAddr,
+					(struck sockaddr *) &servAddr,
 				sizeof(servAddr));
   if (status < 0)
 	{
@@ -157,19 +174,20 @@ int main(int argc, char* argv[])
 	  cerr << "Unable to set listen" << endl;
 	  exit(-1);
 	}
-  cout << "Socket configured, listening for client..." << endl;
+  cout << "Socket configured, listening for client...\n\n" << endl;
 
-  while(true)
+  cout << "Type ctrl-c to exit\n\n\n"
+  while(sighandle == 1)
 	{
 	  //sit and wait until we get a connection
-	  //when we do, put it in a sockaddr_in struct
+	  //when we do, put it in a sockaddr_in struck
 	  //and get int descriptor for it
-	  struct sockaddr_in clientAddr;
+	  struck sockaddr_in clientAddr;
 	  
 	  socklen_t addrLen = sizeof(clientAddr);
 	  
 	  int clientSock = accept(sock,
-							  (struct sockaddr *) &clientAddr,
+							  (struck sockaddr *) &clientAddr,
 							  &addrLen);
 	  if(clientSock < 0)
 		{
@@ -178,7 +196,7 @@ int main(int argc, char* argv[])
 		}
 	  cout << "Client Connected." << endl;
 
-	  //create and init agrument struct
+	  //create and init agrument struck
 	  ThreadArgs *args = new ThreadArgs;
 	  args->clientSock = clientSock;
 	  
@@ -192,7 +210,7 @@ int main(int argc, char* argv[])
 		  exit(-1);
 		}
 	}
-  
+  printStats();
   return 0;
 }
 
@@ -249,7 +267,7 @@ unsigned long getCheckSum(unsigned long tmpRe, unsigned long tmpCandi,
 	return CSUM ^ tmpRe ^ tmpCandi ^ tmpVC ^ tmpCk;
 }
 
-int sendall(int socket)
+int sendall()
 {
 		int total = 0;
 		int bytesleft = LENGTH;
@@ -286,6 +304,7 @@ void processClient(int clientSock)
 		}
 	  bytesLeft = bytesLeft - bytesRecv;
 	}
+	numMsg++;
  //**** process buffer 
 	tmpMag = (buffer[23] << 8) + (buffer[22]);
 	tmpFlag = buffer[21];
@@ -311,7 +330,7 @@ void processClient(int clientSock)
 	
 	if(tmpMag != MAGIC){
 		cout << "Error. Magic is not.\n\n";
-		
+		num_f_u_++;
 		// do shit with bad mag
 		tmpFlag |= 1 << 2;
 	}
@@ -328,6 +347,7 @@ void processClient(int clientSock)
 			cout << "incorrect checksum. bad dog.\n\n";
 			tmpFlag |= 1 << 1;
 			isGood = false;
+			num_f_u_++;
 			//process error
 	}else{
 		isGood = true;
@@ -345,19 +365,21 @@ void processClient(int clientSock)
 		if(tmpType == TYPEINQ) {
 			pthread_mutex_lock(&boardLock);
 			processInquiry(tmpReq, tmpCand, tmpFlag);
-			sendall(clientSock);
+			sendall();
 			pthread_mutex_unlock(&boardLock);
 		}else if(tmpType == TYPEVOTE){
 		
 			pthread_mutex_lock(&boardLock);
-			processVote(tmpReq, tmpCand, tmpVot, tmpCook);
-			pthread_mutex_unlock(&boardLock);\
+			processVote(tmpReq, tmpCand, tmpVot, tmpCook, tmpFlag);
+			sendall();
+			pthread_mutex_unlock(&boardLock);
 			
 		}else{
+			num_f_u_++
 			tmpFlag |= 1 << 0;
 		}
 	}			
-	// send reply shit
+
 }  
     
 void *threadMain(void *args)
@@ -368,7 +390,7 @@ void *threadMain(void *args)
   pthread_detach(pthread_self());
 
   //extract the socket FD
-  struct ThreadArgs *threadArgs = (struct ThreadArgs *) args;
+  struck ThreadArgs *threadArgs = (struck ThreadArgs *) args;
   clientSock = ((ThreadArgs *) threadArgs)->clientSock;
     
   //communicate with client;
@@ -407,12 +429,33 @@ void processInquiry(unsigned long r, unsigned long c, unsigned char f)
 }
 
 void processVote(unsigned long r, unsigned long c, 
-					unsigned long vc, unsigned long omnomnomnomnom)
+					unsigned long vc, unsigned long omnomnomnomnom, unsigned char f)
 {
 	int hashNo = hashCand(c);
 	candidate_info[hashNo].ReqID = r;
 	candidate_info[hashNo].Candidate = c;
 	candidate_info[hashNo].VoteCount = vc;
 	candidate_info[hashNo].Cookie = omnomnomnomnom;
+	setFirstRow(MAGIC, f, TYPEVOTE)
+	fillBuff();
+}
+
+void handler(int s)
+{
+	sighandle = 0;
+}
+
+void printStats()
+{
+	cout << "Total Messages: " << numMsg;
+	cout << "\n\n Votes: " << numVotes;
+	cout << "\n\n Inquiries: " << numInq;
+	cout << "\n\n Erroneous Messages: " << num_f_u_;
+	cout << "\n\n\nvoting history: \n\n";
+	REP(0, 65536) {
+		if ( candidate_info[i].req_ID != 0 ){
+			cout << "\ncandidate: " << candidate_info[i].Candidate << endl;
+			cout << "votes: " << candidate_info[i].VoteCount << endl;
+	}
 }
 

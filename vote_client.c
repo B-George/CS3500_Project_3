@@ -68,10 +68,10 @@ unsigned long getCheckSum(unsigned long tmpRe, unsigned long tmpCandi,
 // socket == socket to send data to
 // buf == data buffer
 // *len == pointer to buffer length in bytes (int)
-int sendall(int socket, char *buf, int *len);
+int sendall();
 
 // receive response from server
-void recvall(int socket);
+void recvall();
 
 // display voting statistics
 void displayStats();
@@ -171,7 +171,7 @@ int main(int argc, char* argv[])
 			}
 		}
 		isValidInput = false;
-		cout << "Would you like to vote again?\n");
+		cout << "Would you like to make another request?\n");
 		cout << "Type 1 for yes, 0 for no\n\n");
 		cin >> input;
 		if( input == 0 ) {
@@ -299,14 +299,14 @@ void getStats()
 	numInq++;	
 }
 
-int sendall(int socket)
+int sendall()
 {
 		int total = 0;
 		int bytesleft = LENGTH;
 		int n;
 		
 		while(total < LENGTH) {
-			n = send(socket, out_buffer+total, bytesleft, 0);
+			n = send(sock, out_buffer+total, bytesleft, 0);
 			if (n == -1) {break; }
 			total += n;
 			bytesleft -= n;
@@ -315,22 +315,21 @@ int sendall(int socket)
 		return n == -1?-1:0; // return -1 on failure, 0 on success
 }
 
-void recvall(int clientSock)
+void recvall()
 {
-	bool isGood = false;
 	unsigned short tmpMag;
 	unsigned char tmpFlag, tmpType;
-  unsigned long tmpReq, tmpCSum, tmpCand, tmpVot, tmpCook;
+  unsigned long tmpFR, tmpReq, tmpCSum, tmpCand, tmpVot, tmpCook;
   int bytesLeft = 24;
   char buffer[24];
   char* bp = buffer;
   while(bytesLeft > 0)
 	{
-	  int bytesRecv = recv(clientSock, &buffer[24-bytesLeft],
+	  int bytesRecv = recv(sock, &buffer[24-bytesLeft],
 						   bytesLeft, 0);
 	  if(bytesRecv <= 0)
 		{
-		  cout << "Probable client disconnect" << endl;
+		  cout << "Probable server disconnect" << endl;
 		  return;
 		}
 	  bytesLeft = bytesLeft - bytesRecv;
@@ -346,16 +345,15 @@ void recvall(int clientSock)
 	tmpVot = (buffer[7] << 24) + (buffer[6] << 16) + (buffer[5] << 8) + (buffer[4]);
 	tmpCook = (buffer[3] << 24) + (buffer[2] << 16) + (buffer[1] << 8) + (buffer[0]);
 	
-	#if DEBUG == 1
-		cout << "\nmessage contents\nmagic = " << tmpMag << endl;
-		cout << "Flag = " << tmpFlag << endl;
-		cout << "Type = " << tmpType << endl;
-		cout << "Req_ID = " << tmpReq << endl;
-		cout << "check_sum = " << tmpCSum << endl;
-		cout << "candidate = " << tmpCand << endl;
-		cout << "vote ct = " << tmpVot << endl;
-		cout << "cookie = " << tmpCook << endl << endl;
-	#endif
+	cout << "\nmessage contents\nmagic = " << tmpMag << endl;
+	cout << "Flag = " << tmpFlag << endl;
+	cout << "Type = " << tmpType << endl;
+	cout << "Req_ID = " << tmpReq << endl;
+	cout << "check_sum = " << tmpCSum << endl;
+	cout << "candidate = " << tmpCand << endl;
+	cout << "vote ct = " << tmpVot << endl;
+	cout << "cookie = " << tmpCook << endl << endl;
+	
 	
 	ntohs(tmpMag);
 	
